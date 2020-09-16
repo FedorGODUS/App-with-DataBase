@@ -3,6 +3,7 @@ package lab.Commands;
 
 import lab.BD;
 import lab.BasicClasses.MusicBand;
+import lab.BasicClasses.User;
 import lab.Commands.SerializedCommands.Message;
 import lab.Utils.Validator;
 
@@ -23,29 +24,27 @@ public class CommandReceiver {
         //return "Коллекция типа: ArrayList\nДата инициализации: ";
     }
 
-    public String show() throws IOException {
+    public String show() {
         BD.sort();
-        String result = "";
-        if(BD.size() != 0) {
+        StringBuilder result = new StringBuilder();
+        if (BD.size() != 0) {
             for (int i = 0; i < BD.size(); i++) {
-                result = result + BD.get(i).toString() + "\n";
+                result.append(BD.get(i).toString()).append("\n");
             }
-        }
-        else{
-            result = ("Элементы отсутствуют");
+        } else {
+            result = new StringBuilder(("Элементы отсутствуют"));
         }
         System.out.println("Клиенту отправлен результат работы команды SHOW");
-        return result;
+        return result.toString();
     }
 
-    public String add(MusicBand o) throws IOException {
-        o.setID((long) BD.giveID());
+    public String add(MusicBand o) {
+        o.setID(BD.giveID());
         o.setCreationDate(LocalDateTime.now());
         if (Validator.validateMusicBand(o)) {
-            if(BD.add(o)){
+            if (BD.add(o)) {
                 return "Элемент добавлен в коллекцию.";
-            }
-            else{
+            } else {
                 return "Элемент не добавлен в коллекцию.";
             }
         } else {
@@ -56,22 +55,30 @@ public class CommandReceiver {
     /**
      *
      */
-    public String update(Message mes) throws IOException {
-        Integer groupId;
+    public String update(Message mes) {
+        int groupId;
         try {
             groupId = Integer.parseInt(mes.getArgs());
             if (BD.checkExist(groupId)) {
                 if (Validator.validateMusicBand(mes.getMusicBand())) {
                     MusicBand o = mes.getMusicBand();
-                    o.setID((long)groupId);
+                    o.setID((long) groupId);
                     o.setCreationDate(LocalDateTime.now());
-                    BD.update(o, groupId);
-                    return "Команда update выполнена.";
+                    if (BD.get(groupId).getUser_creator().equals(o.getUser_creator())) {
+                        if (BD.update(o, groupId)) {
+                            return "Команда update выполнена.";
+                        } else {
+                            return "Команда update не выполнена.";
+                        }
+                    } else {
+                        return "Команда update не выполнена. Вы не владелец этого объекта.";
+                    }
                 } else {
                     return "Полученный элемент не прошел валидацию на стороне сервера.";
                 }
+            } else {
+                return "Элемента с таким ID нет в коллекции.";
             }
-            else {return "Элемента с таким ID нет в коллекции.";}
         } catch (NumberFormatException e) {
             return "Команда не выполнена. Вы ввели некорректный аргумент.";
         }
@@ -81,13 +88,20 @@ public class CommandReceiver {
      *
      * @param ID - удаление по ID.
      */
-    public String removeById(String ID) throws IOException {
-        Integer groupId;
+    public String removeById(String ID, String name) {
+        int groupId;
         try {
             groupId = Integer.parseInt(ID);
             if (BD.checkExist(groupId)) {
-                BD.remove(groupId);
-                return "Элемент с ID " + groupId + " успешно удален из коллекции.";
+                if (BD.get(groupId).getUser_creator().equals(name)) {
+                    if (BD.remove(groupId)) {
+                        return "Элемент с ID " + groupId + " успешно удален.";
+                    } else {
+                        return "Команда remove не выполнена.";
+                    }
+                } else {
+                    return "Элемент с ID " + groupId + " не принадлежит вам.";
+                }
             } else {
                 return "Элемента с таким ID нет в коллекции.";
             }
@@ -112,18 +126,20 @@ public class CommandReceiver {
             return BD.head();
     }
 
-    public String  filterContainsName(String arg) throws IOException {
-        String result = "";
+    public String filterContainsName(String arg) {
+        StringBuilder result = new StringBuilder();
         int j = 0;
         for (int i = 0; i < BD.size(); i++) {
             if (BD.get(i).getName().contains(arg)) {
-                result += BD.get(i).toString() + "\n";
+                result.append(BD.get(i).toString()).append("\n");
                 j++;
             }
         }
         if (j != 0) {
-            return result;
-        } else { return "Таких элементов нет";}
+            return result.toString();
+        } else {
+            return "Таких элементов нет";
+        }
     }
 
     public String countGreaterThanNumberOfParticipant(int NoP) throws IOException {
@@ -136,7 +152,7 @@ public class CommandReceiver {
         } else { return "Таких элементов нет";}
     }
 
-    public String averageOfAlbumCount() throws IOException {
+    synchronized public String averageOfAlbumCount() throws IOException {
         int sum = BD.getData().stream().mapToInt((x) -> {
             return Math.toIntExact(x.getAlbumCount());
         }).sum();
@@ -144,7 +160,7 @@ public class CommandReceiver {
     }
 
 
-    public String addIfMax(MusicBand mb) {
+    synchronized public String addIfMax(MusicBand mb) {
         if (Validator.validateMusicBand(mb)) {
             return BD.addIfMax(mb);
         } else {
@@ -153,7 +169,34 @@ public class CommandReceiver {
     }
 
 
-    public String auth(String st){
-        return null;
+    synchronized public String auth(String string) {
+        String[] s = string.split(":::", 2);
+        int result = BD.findUser(s[0], s[1]);
+        if (result == 1) {
+            return "Успешная авторизация";
+        } else if (result == -1) {
+            return "Неправильный пароль";
+        } else {
+            if (BD.addUser(new User(s[0], s[1]))) {
+                return "Пользователь зарегистрирован";
+            } else {
+                return "Пользователь не зарегистрировн, произошла ошибка";
+            }
+        }
+    }
+    synchronized public String register(String string) {
+        String[] s = string.split(":::", 2);
+        int result = BD.registerUser(s[0], s[1]);
+        if(result == 0){
+            if (BD.addUser(new User(s[0], s[1]))) {
+                return "Пользователь зарегистрирован";
+            }
+            else{
+                return "Пользователь не зарегистрировн, произошла ошибка";
+            }
+        }
+        else{
+            return "Имя пользователя занято";
+        }
     }
 }

@@ -13,11 +13,11 @@ public class RemoveByID extends Command {
     private static final long serialVersionUID = 33L;
 
     @Override
-    public String execute(Object argObject) throws IOException {
+    public String execute(Object argObject) {
         String arg = ((Message)argObject).getArgs();
         if (arg.split(" ").length == 1) {
             CommandReceiver commandReceiver = new CommandReceiver();
-            return commandReceiver.removeById(arg);
+            return commandReceiver.removeById(arg, ((Message) argObject).getUser_name());
         }
         else { return "Некорректное количество аргументов. Для справки напишите help."; }
     }
